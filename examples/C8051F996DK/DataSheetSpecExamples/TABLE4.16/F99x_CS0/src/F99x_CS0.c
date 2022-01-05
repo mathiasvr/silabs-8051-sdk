@@ -1,0 +1,362 @@
+//-----------------------------------------------------------------------------
+// F99x_CS0.c
+//-----------------------------------------------------------------------------
+// Copyright 2014 Silicon Laboratories, Inc.
+// All rights reserved. This program and the accompanying materials
+// are made available under the terms of the Silicon Laboratories End User
+// License Agreement which accompanies this distribution, and is available at
+// http://developer.silabs.com/legal/version/v11/Silicon_Labs_Software_License_Agreement.txt
+// Original content and implementation provided by Silicon Laboratories.
+//
+// This example demonstrates the electrical characteristics of the Capacitive
+// Sense module, CS0, as specified by table 4.16 of the datasheet.
+//
+// Refer to F99x_CS0_Readme.txt for more information regarding
+// the functionality of this code example.
+//
+// How To Test (Table 4.16 - Power Supply Current):
+// ---------------------------------------------------------
+// 1) Ensure a shorting block is placed the J10 (VBAT & WALL_PWR) .
+// 2) Power the board using the P2 power connector.
+// 3) Remove the J17 shorting block and attach an ammeter between
+//    the Imeasure headers.
+// 4) Remove all of the shorting blocks on the board except for the block
+//    across SW0.3 and P0.3H on J8
+// 5) Compile and download code to a 'F99x device on a C8051F996-TB development
+//    board by selecting Run -> Debug from the menus, clicking the Debug button
+//    in the quick menu, or pressing F11.
+// 6) Run the code by selecting Run -> Resume from the menus, clicking the
+//    Resume button in the quick menu, or pressing F8.
+// 7) To cycle between CS0 on/off, push SW0.3 (P0.3).
+// 8) Record the current each time. The difference is the power supply current
+//    on datasheet for the CS0 module bias current in Table 4.16
+//
+// How To Test (Table 4.16 - Single Conversion time):
+// ---------------------------------------------------------
+// 1) Ensure the shorting blocks are placed the J10 (VBAT & WALL_PWR) and J17
+//    IMEASURE.
+// 2) Power the board using the P2 power connector.
+// 3) Remove all of the shorting blocks on the board expect for the block
+//    across SW0.2 and P0.2H on J8
+// 4) Compile and download code to a 'F99x device on a C8051F996-TB development
+//    board by selecting Run -> Debug from the menus, clicking the Debug button
+//    in the quick menu, or pressing F11.
+// 5) Run the code by selecting Run -> Resume from the menus, clicking the
+//    Resume button in the quick menu, or pressing F8.
+// 6) Attach a probe on P1.5 and observe it on oscilloscope.
+// 7) To cycle between CS0 conversion bit lengths, push SW0.2 (P0.2).
+// 8) The length of low level on P1.5 is the single conversion time on datasheet
+//    for the CS0 in Table 4.16
+//
+//
+// Target:         C8051F99x-C8051F98x
+// Tool chain:     Simplicity Studio / Keil C51 9.51
+// Command Line:   None
+//
+//
+// Release 1.0
+//    - Initial Revision (MT)
+//    - 01 NOV 2013
+//
+//
+
+//-----------------------------------------------------------------------------
+// Include Files
+//-----------------------------------------------------------------------------
+
+#include <SI_C8051F990_Register_Enums.h>
+
+//-----------------------------------------------------------------------------
+// Bit Definitions
+//-----------------------------------------------------------------------------
+
+SI_SBIT(DS3,   SFR_P1, 5);                // '0' means ON, '1' means OFF
+SI_SBIT(DS4,   SFR_P1, 3);                // '0' means ON, '1' means OFF
+SI_SBIT(SW0_2, SFR_P0, 2);                // SW2 == 0 means switch pressed
+SI_SBIT(SW0_3, SFR_P0, 3);                // SW3 == 0 means switch pressed
+
+//-----------------------------------------------------------------------------
+// Global Constants
+//-----------------------------------------------------------------------------
+
+#define SYSCLK              20000000    // Clock speed in Hz
+#define SW_PRESSED          0
+#define SW_NOT_PRESSED      1
+
+#define LED_ON              0
+#define LED_OFF             1
+
+//-----------------------------------------------------------------------------
+// Function Prototypes
+//-----------------------------------------------------------------------------
+
+void SYSCLK_Init (void);                // Configure the system clock
+void PORT_Init (void);                  // Configure the Crossbar and GPIO
+void Wait_MS(unsigned int ms);          // Inserts programmable delay
+void Mode_Update(void);                 // Cycle Reference mode,push SW0_2
+//-----------------------------------------------------------------------------
+// Global Variables
+//-----------------------------------------------------------------------------
+
+// Debounce latches for SW0.2 
+uint8_t switch1Latch = 0; 
+// Debounce latches for SW0.3 
+uint8_t switch2Latch = 0; 
+
+//-----------------------------------------------------------------------------
+// SiLabs_Startup() Routine
+// ----------------------------------------------------------------------------
+// This function is called immediately after reset, before the initialization
+// code is run in SILABS_STARTUP.A51 (which runs before main() ). This is a
+// useful place to disable the watchdog timer, which is enable by default
+// and may trigger before main() in some instances.
+//-----------------------------------------------------------------------------
+void SiLabs_Startup (void)
+{
+    PCA0MD &= ~0x40;                    // Disable Watchdog timer
+}
+ 
+// Mode type enumerations
+enum CONVERSION_RATE{BIT_12 = 0,
+                     BIT_13 = 1,
+                     BIT_14 = 2,
+                     BIT_16 = 3};
+						
+enum CONVERSION_RATE conversionRate;
+//-----------------------------------------------------------------------------
+// main() Routine
+//-----------------------------------------------------------------------------
+void main (void)
+{
+   
+
+    PORT_Init ();                       // Initialize crossbar and GPIO
+    SYSCLK_Init();                      // Initialize the system clock
+ 
+    conversionRate = BIT_12;
+    CS0CN |= 0x80;
+    CS0CF = 0x60;                       // The channel selected by CS0MX  
+    CS0MX = 0x08;                       // Conversion channel P1.0
+    CS0MD2 = conversionRate << 6;       // Default conversion rate
+
+    while(1)
+    {  
+        Mode_Update();
+    }
+
+} 
+
+//-----------------------------------------------------------------------------
+// Initialization Subroutines
+//-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+// PORT_Init
+//-----------------------------------------------------------------------------
+//
+// Return Value : None
+// Parameters   : None
+//
+// This function configures the crossbar and ports pins.
+//
+// Pinout:
+//
+// P0.2   digital   open-drain    Switch 1
+// P0.3   digital   open-drain    Switch 2
+// P1.0   analog    open-drain    CS0 input
+
+// P1.5   digital   push-pull     DS3
+// P1.3   digital   push-pull     DS4
+//-----------------------------------------------------------------------------
+void PORT_Init (void)
+{
+   
+   // P1.0  Analog input
+   P1MDIN  &= ~0x01;                   // P1.0 is analog
+   P1MDOUT &= ~0x01;                   // P1.0 is open-drain
+   P1      |=  0x01;                   // Set P1.0 latch to '1' 
+   P1SKIP  |=  0x01;                   // P1.0 skipped in Crossbar
+   
+   // Switch   
+   P0MDIN  |=  0x0C;                   // P0.2, P0.3 are digital
+   P0MDOUT &= ~0x0C;                   // P0.2, P0.3 are open-drain
+   P0      |=  0x0C;                   // Set P0.2, P0.3 latches to '1'
+   P0SKIP  |=  0x0C;                   // P0.2, P0.3 skipped in Crossbar
+
+   // LEDs
+   P1MDIN  |= 0x28;                    // P1.5, P1.3 are digital
+   P1MDOUT |= 0x28;                    // P1.5, P1.3 are push-pull
+   P1      |= 0x28;                    // Set P1.5, P1.3 latches to '1'
+   P1SKIP  |= 0x28;                    // P1.5, P1.3 skipped in Crossbar
+
+
+   XBR2    = 0x40;                     // Enable crossbar and enable
+                                       // weak pull-ups
+}
+
+//-----------------------------------------------------------------------------
+// SYSCLK_Init
+//-----------------------------------------------------------------------------
+//
+// Return Value : None
+// Parameters   : None
+//
+// This function initializes the system clock to use the internal low power
+// oscillator at its maximum frequency.
+//
+//-----------------------------------------------------------------------------
+void SYSCLK_Init (void)
+{
+    
+    // Select Low-Power Oscillator 20 MHz as system clock source
+    // Since using the precision internal oscillator as the system clock source, 
+    // the precision voltage reference should not be enabled from a disabled 
+    // state. 
+    CLKSEL = 0x04;        
+    OSCICN &= ~0x80;
+    REG0CN &=~0x10;
+    
+    // At clock frequencies above 10 MHz, the system clock cycle becomes 
+    // short enough that the one-shot timer no longer provides a power benefit.
+    // Disabling the one-shot timer at higher frequencies reduces power 
+    // consumption. 
+    FLSCL = 0x40;
+}
+
+//-----------------------------------------------------------------------------
+// Support Subroutines
+//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+// Mode_Update
+//-----------------------------------------------------------------------------
+//
+// Return Value : None
+// Parameters   : None
+//
+// This function checks switch input and select CS0 conversion Rate,
+// once each time the switch is pressed. 
+// The cycling order is as follows:
+//
+// Switch Sw0_2:
+// Mode 1: conversion rate 12 bit
+// Mode 2: conversion rate 13 bit
+// Mode 3: conversion rate 14 bit
+// Mode 4: conversion rate 16 bit
+//
+// Switch SW0_3:
+// Toggle CS0 ON / OFF 
+//
+// P0.2   digital   open-drain   input   SW0_2
+// P0.3   digital   open-drain   input   SW0_3
+//
+//-----------------------------------------------------------------------------
+void Mode_Update(void)
+{
+    // Cycle CS0 conversion Rate if P0.2 is pushed
+    if( (SW0_2 == SW_PRESSED) && (!switch1Latch) )
+    { 
+        // Disable CS0 and clean interrupt flag.
+        CS0CN &= ~0xA0;
+        
+        switch (conversionRate)
+        {
+            case BIT_12:
+                conversionRate = BIT_13;
+                break;
+                
+            case BIT_13:
+                conversionRate = BIT_14;
+                break;
+            
+            case BIT_14:
+                conversionRate = BIT_16;
+                break;
+                
+            case BIT_16:
+                conversionRate = BIT_12;
+                break;    
+        }
+        CS0MD2 = conversionRate << 6;
+        DS3 = LED_ON;                   // Turn ON  DS3
+        // Enable CS0. Start conversion. 
+        CS0CN = 0x90;
+        
+        // Waiting for conversion complete.
+        while (!(CS0CN & 0x20));
+        DS3 = LED_OFF;                  // Turn OFF DS3
+        
+        Wait_MS(50);                    // Wait 50 milliseconds
+        // Arm latches to prevent auto-cycling with switch held
+        switch1Latch = 1;
+    }
+
+    // Reset latch once switch is released
+    else if(SW0_2 == SW_NOT_PRESSED)
+    {
+        switch1Latch = 0;
+    }
+    
+    // Cycle Capacitive Sense ON / OFF if P0.3 is pushed
+    if( (SW0_3 == SW_PRESSED) && (!switch2Latch) )
+    {
+        CS0CN ^= 0x80;
+        // Wait 50 milliseconds
+        Wait_MS(50);                   
+        switch2Latch = 1;
+    }  
+    
+    // Reset latch once switch is released
+    else if(SW0_3 == SW_NOT_PRESSED)
+    {
+        switch2Latch = 0;
+    }
+}
+//-----------------------------------------------------------------------------
+// Wait_MS
+//-----------------------------------------------------------------------------
+//
+// Return Value : None
+// Parameters:
+//   1) unsigned int ms - number of milliseconds of delay
+//                        range is full range of integer: 0 to 256
+//
+// This routine inserts a delay of <ms> milliseconds.
+//-----------------------------------------------------------------------------
+void Wait_MS(unsigned int ms)
+{
+   char i;
+
+   TCON_TR0 = 0;                            // Stop Timer0
+   
+   TMOD &= ~0x0F;                      // Timer0 in 8-bit mode
+   TMOD |= 0x02;
+   
+   CKCON &= ~0x03;                     // Timer0 uses a 1:48 prescaler
+   CKCON |= 0x02;                   
+    
+   
+   TH0 = -SYSCLK/48/10000;             // Set Timer0 Reload Value to 
+                                       // overflow at a rate of 10kHz
+   
+   TL0 = TH0;                          // Init Timer0 low byte to the
+                                       // reload value
+   
+   TCON_TF0 = 0;                            // Clear Timer0 Interrupt Flag
+   IE_ET0 = 0;                            // Timer0 interrupt disabled
+   TCON_TR0 = 1;                            // Timer0 on
+
+   while(ms--)
+   {
+      for(i = 0; i < 10; i++)
+      {
+         TCON_TF0 = 0;
+         while(!TCON_TF0);
+      }
+   }
+
+   TCON_TF0 = 0;
+
+}
+//-----------------------------------------------------------------------------
+// End Of File
+//-----------------------------------------------------------------------------

@@ -1,0 +1,16 @@
+Capacitive Sensing library example tuned for no overlay
+
+This example uses the capacitive sensing firmware library to detect
+touches on the 24 sensors on the F970 target board.  The library
+configuration files are set to use touch detection thresholds appropriate
+for sensors without an overlay.
+
+When firmware detects a touch on any of the sensors in the touch pad space
+by lighting up LED05.  If firmware detects a second touch in the touch pad
+area, LED15 lights up.  If the user touches the slider, the LEDs beside the 
+slider will show the output from the centroid algorithm.
+
+For more information on the capacitive sense library and 
+Capacitive Sense Profiler, see AN0828: “Capacitive Sensing Library Overview”
+and AN0829: “Capacitive Sensing Library Configuration Guide” by clicking the
+Application Notes tile from the main Simplicity Studio launcher.

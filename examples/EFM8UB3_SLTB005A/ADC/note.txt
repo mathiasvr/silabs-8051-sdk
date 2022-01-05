@@ -1,0 +1,1 @@
+These examples are on hold; I'm trying to figure out how to use retargetserial on UART1

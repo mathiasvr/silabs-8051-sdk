@@ -1,0 +1,14 @@
+*.hex
+*.omf
+*.lcf
+*.cwg
+*.slsproj
+*.slsproj-*
+*.wsp
+*.hwconf
+*.ewd
+*.ewp
+*.eww
+*.log
+generate_slsproj.py
+host/

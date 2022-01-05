@@ -1,0 +1,86 @@
+EFM8UB1 BGX Demo
+
+This example demonstrates the stream and command functionality of the BGX
+in Peripheral and Central mode using the STK, LCD, push buttons, joystick,
+and the Silabs BGX Commander mobile app.
+
+----------------------------------------------------------------------------
+How To Test: EFM8UB1 STK + BGX Board
+----------------------------------------------------------------------------
+1)  Place the SW104 switch in "AEM" mode.
+2)  Connect the EFM8UB1 STK board to a PC using a mini USB cable.
+3)  Connect the EFM8UB1 STK board to a BGX Board via EXP header.
+4)  Compile and download code to the EFM8UB1 STK board.
+    In Simplicity Studio IDE, select Run -> Debug from the menu bar,
+    click the Debug button in the quick menu, or press F11.
+5)  Run the code.
+    In Simplicity Studio IDE, select Run -> Resume from the menu bar,
+    click the Resume button in the quick menu, or press F8.
+6)  The BGX DEMO should start and its UI should be displayed on the LCD.
+
+PERIPHERAL MODE:
+7)  Follow the on screen instructions to set the BGX as a Peripheral 
+    device. The screen will end up in the RX/TX UI display.
+8)  Press PB0 or PB1 to have the UB1 send text to the BGX Board via UART1.
+    TX sent from the UB1 STK board will be displayed on the LCD.
+9)  If the BGX was set to an unconnected Peripheral mode, the buttons are in
+    LOCAL_COMMAND_MODE and will send commands. Output of these commands can
+    be seen in the RX Data on the LCD.
+       PB0 is a get firmware version command.
+       PB1 is a get Bluetooth address command.
+10) If set in an unconnected Peripheral, open the Silabs BGX Commander 
+    mobile app.
+11) Connect to the BGX on the mobile app and enter STREAM_MODE
+12) Since the mobile app is connected to the BGX, the buttons are in
+    STREAM_MODE and will send text. Use the mobile app's STREAM_MODE to have
+    the BGX send text to the UB1 via UART1. RX received by the EFM8UB1
+    STK board will be displayed on the LCD.
+       PB0 sends "PB0 was Pressed!"
+       PB1 sends "PB1 was Pressed!"
+13) Use the mobile app's COMMAND_MODE to toggle an LED on the EXP Board
+       gfu 3 stdio  // set traffic LED as a stdio
+       gdi 3 olo    // set output direction to low
+       gdi 3 ohi    // set output direction to high
+
+CENTRAL MODE:
+7)  Follow the on screen instructions to set the BGX as a Central.
+    The instructions will help establish a connection to a nearby
+    Peripheral BGX. The screen will end up in the RX/TX UI display.
+8)  Since the BGX is connected to another BGX, the buttons are in
+    STREAM_MODE and will send text. Use either STK's buttons to send text
+    to the UB1 via UART1. The text will be transmitted to the connected
+    BGX via Bluetooth. RX received by the other EFM8UB1 STK board will be 
+    displayed on the LCD.
+       PB0 sends "PB0 was Pressed!"
+       PB1 sends "PB1 was Pressed!"
+
+NOTE: If a change is made to EFM8UB1_BGX.hwconf, an Interrupts.c will be
+      generated. Interrupts.c must be deleted to avoid compilation
+      errors.
+
+Target:         EFM8UB1
+Tool chain:     Generic
+
+Release 0.1 (MD;AT)
+   - Initial Revision
+   - 9 AUG 2018
+   
+-----------------------------------------------------------------------------
+ Resources:
+-----------------------------------------------------------------------------
+ SYSCLK - 6.125 MHz HFOSC
+ SPI1   - 500 kHz
+ Timer2 - 93 Hz
+ Timer3 - 1 kHz (1 ms tick)
+ P0.0 - MODE PIN
+ P0.2 - Push Button 0
+ P0.3 - Push Button 1
+ P0.6 - LCD SCK
+ P0.7 - LCD MISO
+ P1.0 - LCD MOSI
+ P1.3 - CONNECTION PIN
+ P1.5 - BGX RESET PIN
+ P1.7 - JOYSTICK ADC
+ P2.1 - UART1 TX
+ P2.2 - UART1 RX
+ ----------------------------------------------------------------------------
